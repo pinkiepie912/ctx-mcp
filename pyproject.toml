@@ -1,0 +1,35 @@
+[project]
+name = "ctx-mcp"
+version = "0.1.0"
+description = ""
+authors = [
+    {name = "pinkiepie",email = "pinkiepies0912@gmail.com"}
+]
+readme = "README.md"
+requires-python = ">=3.11,<4"
+dependencies = [
+    "pydantic (>=2.11.7,<3.0.0)",
+    "tree-sitter (>=0.25.0,<0.26.0)",
+    "ruamel-yaml (>=0.18.14,<0.19.0)",
+    "tree-sitter-python (>=0.23.6,<0.24.0)"
+]
+
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.poetry.group.dev.dependencies]
+black = "^25.1.0"
+black = "^25.1.0"
+pytest = "^8.4.1"
+pytest-cov = "^6.2.1"
+pytest-mock = "^3.14.1"
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+minversion = "8.0"
+testpaths = ["tests"]
+python_files = ["test_*.py", "*_test.py"]
+python_functions = ["test_*"]
+addopts = "-v -rA --strict-markers --cov=src --cov-report=term-missing"
