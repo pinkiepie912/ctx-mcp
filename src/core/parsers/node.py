@@ -1,39 +1,48 @@
-from typing import List, Optional, Dict, Set
+from typing import List, Optional
 from tree_sitter import Node as TsNode
 from pathlib import Path
 
 from .text import parse_text
 
-from core.models import Node, NodeType, NodeScope
+from core.models import Node, NodeType, NodeScope, NodeParameter
 
-__all__ = ["parse_nodes"]
-
-
-def parse_nodes(code: bytes, ts_node: TsNode, filepath: str) -> List[Node]:
-    """
-    Parse Python AST nodes and convert them to Node objects.
-
-    Args:
-        code: Source code bytes
-        ts_node: Tree-sitter root node
-        filepath: File path for the source
-
-    Returns:
-        List of parsed Node objects
-    """
-    parser = _NodeParser(code, filepath)
-    return parser.parse(ts_node)
+__all__ = ["NodeParser"]
 
 
-class _NodeParser:
+class NodeParser:
     """Parser for extracting Node objects from Tree-sitter"""
+
+    # Class-level constants to eliminate duplication
+    DEFINITION_TYPES = frozenset(
+        {"class_definition", "function_definition", "async_function_definition"}
+    )
+
+    DEFINITION_TYPE_MAPPING = {
+        "class_definition": NodeType.CLASS,
+        "function_definition": NodeType.FUNCTION,
+        "async_function_definition": NodeType.FUNCTION,
+    }
 
     def __init__(self, code: bytes, filepath: str):
         self.code = code
         self.filepath = filepath
         self.module_path = self._get_module_path(filepath)
-        self.nodes: List[Node] = []
-        self.scope_stack: List[str] = []  # Track nested scopes
+
+    def create_module_node(self, root_node: TsNode) -> Node:
+        """Create module node for the file."""
+        return self._create_module_node(root_node)
+
+    def process_node(self, ts_node: TsNode, parent_id: Optional[str]) -> Optional[Node]:
+        """
+        Process a single node without moving cursor.
+        Only analyzes the given node and returns parsed Node if applicable.
+        """
+        node_type = self._get_node_type(ts_node)
+
+        if node_type:
+            return self._create_node(ts_node, node_type, parent_id)
+
+        return None
 
     def _get_module_path(self, filepath: str) -> str:
         """Convert file path to Python module path"""
@@ -48,17 +57,6 @@ class _NodeParser:
 
         return ".".join(module_parts)
 
-    def parse(self, root_node: TsNode) -> List[Node]:
-        """Parse the AST starting from root node"""
-        # Add module node
-        module_node = self._create_module_node(root_node)
-        self.nodes.append(module_node)
-
-        # Parse child nodes recursively
-        self._parse_node_recursive(root_node, None)
-
-        return self.nodes
-
     def _create_module_node(self, root_node: TsNode) -> Node:
         """Create a MODULE type node for the file itself"""
         return Node(
@@ -71,40 +69,16 @@ class _NodeParser:
             owner_id="",
         )
 
-    def _parse_node_recursive(self, ts_node: TsNode, parent_id: Optional[str]):
-        """Recursively parse Tree-sitter nodes"""
-        node_type = self._get_node_type(ts_node)
-
-        if node_type:
-            node = self._create_node(ts_node, node_type, parent_id)
-            if node:
-                self.nodes.append(node)
-                current_parent = node.id
-            else:
-                current_parent = parent_id
-        else:
-            current_parent = parent_id
-
-        # Parse children
-        for child in ts_node.children:
-            self._parse_node_recursive(child, current_parent)
-
     def _get_node_type(self, ts_node: TsNode) -> Optional[NodeType]:
         """Map Tree-sitter node types to NodeType enum"""
-        type_mapping = {
-            "class_definition": NodeType.CLASS,
-            "function_definition": NodeType.FUNCTION,
-            "async_function_definition": NodeType.FUNCTION,
-        }
-
         # Handle decorated definitions
         if ts_node.type == "decorated_definition":
             # Look for the actual definition in children
             for child in ts_node.children:
-                if child.type in type_mapping:
-                    return type_mapping[child.type]
+                if child.type in self.DEFINITION_TYPE_MAPPING:
+                    return self.DEFINITION_TYPE_MAPPING[child.type]
 
-        return type_mapping.get(ts_node.type)
+        return self.DEFINITION_TYPE_MAPPING.get(ts_node.type)
 
     def _create_node(
         self, ts_node: TsNode, node_type: NodeType, parent_id: Optional[str]
@@ -129,6 +103,11 @@ class _NodeParser:
                 f"{self.filepath}::{node_type.value.lower()}::{parent_name}.{name}"
             )
 
+        # Extract parameters for functions/methods
+        parameters = None
+        if node_type == NodeType.FUNCTION:
+            parameters = self._extract_parameters(ts_node)
+
         return Node(
             id=node_id,
             type=node_type,
@@ -137,24 +116,132 @@ class _NodeParser:
             qulified_name=qualified_name,
             scope=scope,
             owner_id=parent_id or "",
+            parameters=parameters,
         )
 
     def _extract_name(self, ts_node: TsNode, node_type: NodeType) -> Optional[str]:
         """Extract the name of a class or function from Tree-sitter node"""
-        # Handle decorated definitions
-        if ts_node.type == "decorated_definition":
-            for child in ts_node.children:
-                if child.type in [
-                    "class_definition",
-                    "function_definition",
-                    "async_function_definition",
-                ]:
-                    return self._extract_name(child, node_type)
+        # Use iterative approach instead of recursion
+        nodes_to_check = [ts_node]
 
-        # Look for identifier node that contains the name
+        while nodes_to_check:
+            current_node = nodes_to_check.pop(0)
+
+            # Handle decorated definitions - add the actual definition to check
+            if current_node.type == "decorated_definition":
+                for child in current_node.children:
+                    if child.type in self.DEFINITION_TYPES:
+                        nodes_to_check.append(child)
+                continue
+
+            # Look for identifier node that contains the name
+            for child in current_node.children:
+                if child.type == "identifier":
+                    return parse_text(self.code, child)
+
+        return None
+
+    def _extract_parameters(self, ts_node: TsNode) -> List[NodeParameter]:
+        """Extract function parameters from Tree-sitter node"""
+        parameters = []
+
+        # Find the parameters node in the function definition
+        params_node = None
         for child in ts_node.children:
-            if child.type == "identifier":
-                return parse_text(self.code, child)
+            if child.type == "parameters":
+                params_node = child
+                break
+
+        if not params_node:
+            return parameters
+
+        position = 0
+        for param_child in params_node.children:
+            if param_child.type in [
+                "identifier",
+                "default_parameter",
+                "typed_parameter",
+                "typed_default_parameter",
+                "list_splat_pattern",
+                "dictionary_splat_pattern",
+            ]:
+                param = self._parse_parameter_node(param_child, position)
+                if param:
+                    parameters.append(param)
+                    position += 1
+
+        return parameters
+
+    def _parse_parameter_node(
+        self, param_node: TsNode, position: int
+    ) -> Optional[NodeParameter]:
+        """Parse a single parameter node"""
+        param_name = None
+        type_hint = None
+        default_value = None
+        is_varargs = False
+        is_kwargs = False
+        required = True
+
+        if param_node.type == "identifier":
+            # Simple parameter: def func(param):
+            param_name = parse_text(self.code, param_node)
+
+        elif param_node.type == "default_parameter":
+            # Parameter with default value: def func(param=default):
+            for child in param_node.children:
+                if child.type == "identifier":
+                    param_name = parse_text(self.code, child)
+                elif child.type not in ["=", ","]:  # Skip operators and separators
+                    default_value = parse_text(self.code, child)
+                    required = False
+
+        elif param_node.type == "typed_parameter":
+            # Typed parameter: def func(param: Type):
+            for child in param_node.children:
+                if child.type == "identifier":
+                    param_name = parse_text(self.code, child)
+                elif child.type == "type":
+                    type_hint = parse_text(self.code, child)
+
+        elif param_node.type == "typed_default_parameter":
+            # Typed parameter with default: def func(param: Type = default):
+            for child in param_node.children:
+                if child.type == "identifier":
+                    param_name = parse_text(self.code, child)
+                elif child.type == "type":
+                    type_hint = parse_text(self.code, child)
+                elif child.type not in [":", "=", ","]:  # Skip operators
+                    if "=" in parse_text(self.code, param_node):
+                        default_value = parse_text(self.code, child)
+                        required = False
+
+        elif param_node.type == "list_splat_pattern":
+            # *args parameter
+            for child in param_node.children:
+                if child.type == "identifier":
+                    param_name = parse_text(self.code, child)
+            is_varargs = True
+            required = False
+
+        elif param_node.type == "dictionary_splat_pattern":
+            # **kwargs parameter
+            for child in param_node.children:
+                if child.type == "identifier":
+                    param_name = parse_text(self.code, child)
+            is_kwargs = True
+            required = False
+
+        if param_name:
+            return NodeParameter(
+                name=param_name,
+                type_hint=type_hint,
+                default_value=default_value,
+                is_varargs=is_varargs,
+                is_kwargs=is_kwargs,
+                position=position,
+                required=required,
+            )
 
         return None
 

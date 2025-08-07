@@ -19,6 +19,29 @@ class NodeScope(Enum):
     LOCAL = "local"
 
 
+class NodeParameter(BaseModel):
+    """
+    Parameters for a node, used for dependency injection
+
+    Attributes:
+        name: Name of the parameter (e.g. 'order_repo')
+        type_hint: Optional type hint for the parameter (e.g. 'OrderRepository')
+        default_value: Optional default value for the parameter (e.g. 'None' or 'default_repo')
+        is_varargs: Whether this parameter accepts variable arguments (e.g. *args)
+        is_kwargs: Whether this parameter accepts keyword arguments (e.g. **kwargs)
+        position: Position of the parameter in the function signature (0-based index)
+        required: Whether this parameter is required (default=True)
+    """
+
+    name: str
+    type_hint: Optional[str] = None
+    default_value: Optional[str] = None
+    is_varargs: bool = False
+    is_kwargs: bool = False
+    position: int
+    required: bool = True
+
+
 class Node(BaseModel):
     """
     Node model
@@ -40,6 +63,7 @@ class Node(BaseModel):
     qulified_name: str
     scope: NodeScope
     owner_id: str
+    parameters: Optional[List[NodeParameter]] = None
 
 
 class EdgeKind(Enum):
