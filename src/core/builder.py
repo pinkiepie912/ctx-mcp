@@ -1,21 +1,18 @@
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List
 
-from ruamel.yaml import YAML
 from tree_sitter import Language, Parser
 import tree_sitter_python as tspython
 
-from models import DiGraph, Edge, Node, NodeType
-from parsers.node import parse_nodes
-from parsers.edge import parse_edges
+from .models import Edge, Node
+from core.parsers.node import parse_nodes
 
 import pprint
 
 
 class PyGraphBuilder:
-    def __init__(self, root: Path, arch_yaml: Optional[Path] = None):
+    def __init__(self, root: Path):
         self.root = root
-        # self.arch_cfg = YAML(typ="safe").load(arch_yaml.read_text())
         self.language = Language(tspython.language())
         self.parser = Parser(self.language)
 
@@ -34,12 +31,12 @@ class PyGraphBuilder:
             # Parse nodes using the node parser
             root_node = tree.root_node
             file_nodes = parse_nodes(code, root_node, str(file))
-            
+
             # Add nodes to the collection
             for node in file_nodes:
                 nodes[node.id] = node
-                
-            # # Parse edges for this file  
+
+            # # Parse edges for this file
             # file_edges = parse_edges(code, root_node, str(file))
             # edges.extend(file_edges)
 

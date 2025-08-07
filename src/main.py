@@ -1,5 +1,5 @@
 from pathlib import Path
-from builder import PyGraphBuilder
+from core.builder import PyGraphBuilder
 
 
 gb = PyGraphBuilder(Path("/home/hyun/Projects/bmont-be"))
