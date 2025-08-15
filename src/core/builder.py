@@ -1,4 +1,3 @@
-import pprint
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
@@ -6,9 +5,10 @@ import tree_sitter_python as tspython
 from tree_sitter import Language, Parser
 from tree_sitter import Node as TsNode
 
+from core.parsers.edge import EdgeParser
 from core.parsers.node import NodeParser
 
-from .models import Edge, Node
+from .models import DiGraph, Edge, Node
 
 
 class PyGraphBuilder:
@@ -17,42 +17,66 @@ class PyGraphBuilder:
         self.language = Language(tspython.language())
         self.parser = Parser(self.language)
 
-    def build(self) -> None:
+    def build(self) -> DiGraph:
         """
-        Build a graph from the Python source files in the root directory.
+        Build a complete dependency graph from Python source files in the root directory.
+
+        Returns:
+            DiGraph containing all nodes and edges found in the codebase
         """
         nodes: Dict[str, Node] = {}
         edges: List[Edge] = []
 
         # TODO: Ignore gitignore patterns
         for file in self.root.rglob("*.py"):
-            code = file.read_bytes()
-            tree = self.parser.parse(code)
+            try:
+                code = file.read_bytes()
 
-            # Parse nodes using cursor-based traversal
-            file_nodes = self._parse_file_with_cursor(code, tree.root_node, str(file))
+                # Skip empty files
+                if not code.strip():
+                    continue
 
-            # Add nodes to the collection
-            for node in file_nodes:
-                nodes[node.id] = node
+                tree = self.parser.parse(code)
 
-            # TODO: Parse edges for this file using the same cursor traversal
-            # file_edges = parse_edges(code, root_node, str(file))
-            # edges.extend(file_edges)
+                # Parse nodes and edges using cursor-based traversal
+                file_nodes, file_edges = self._parse_file(
+                    code, tree.root_node, str(file)
+                )
 
-        for row in nodes.values():
-            pprint.pprint(row.dict())
-            print("\n")
+                # Add nodes to the collection
+                for node in file_nodes:
+                    nodes[node.id] = node
 
-    def _parse_file_with_cursor(
+                # Add edges to the collection
+                edges.extend(file_edges)
+
+            except Exception as e:
+                print(f"Warning: Failed to parse file {file}: {e}")
+                continue
+
+        # Create complete dependency graph
+        graph = DiGraph(
+            nodes=list(nodes.values()),
+            edges=edges,
+            bindings={},  # Environment-specific bindings can be added later
+        )
+
+        return graph
+
+    def _parse_file(
         self, code: bytes, root_node, filepath: str
-    ) -> List[Node]:
+    ) -> Tuple[List[Node], List[Edge]]:
         """
         Parse a single file using iterative cursor-based traversal.
         No recursion - uses explicit stack for traversal state management.
+
+        Returns:
+            Tuple of (nodes, edges) found in the file
         """
         node_parser = NodeParser(code, filepath)
+        edge_parser = EdgeParser(code, filepath)
         nodes = []
+        edges = []
 
         # Add module node first
         module_node = node_parser.create_module_node(root_node)
@@ -71,12 +95,16 @@ class PyGraphBuilder:
                 nodes.append(parsed_node)
                 current_parent = parsed_node.id
 
-            # TODO: EdgeParser will also process current_ts_node here
-            # parsed_edges = edge_parser.process_node(current_ts_node, current_parent)
-            # edges.extend(parsed_edges)
+            # Let EdgeParser process current node for relationships
+            try:
+                parsed_edges = edge_parser.process_node(current_ts_node, current_parent)
+                edges.extend(parsed_edges)
+            except Exception:
+                # Continue parsing even if edge parsing fails for this node
+                pass
 
             # Add children to stack in reverse order to maintain left-to-right processing
             for child in reversed(current_ts_node.children):
                 traversal_stack.append((child, current_parent))
 
-        return nodes
+        return nodes, edges

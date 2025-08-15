@@ -14,25 +14,27 @@ from .text import parse_text
 class ParameterData:
     """
     Data structure for parsed parameter information.
-    
+
     This immutable structure contains all information extracted from
     a Tree-sitter parameter node, providing type-safe access to
     parameter attributes.
-    
+
     Attributes:
         name: Parameter name (e.g., 'param', 'args', 'kwargs')
         type_hint: Type annotation if present (e.g., 'str', 'List[int]')
         default_value: Default value expression if present (e.g., 'None', '[]')
         is_varargs: True for *args parameters
-        is_kwargs: True for **kwargs parameters  
+        is_kwargs: True for **kwargs parameters
         required: False if parameter has default value or is *args/**kwargs
     """
+
     name: Optional[str] = None
     type_hint: Optional[str] = None
     default_value: Optional[str] = None
     is_varargs: bool = False
     is_kwargs: bool = False
     required: bool = True
+
 
 __all__ = ["NodeParser", "ParameterData"]
 
@@ -186,9 +188,7 @@ class NodeParser:
             f"{self.filepath}{self.ID_SEPARATOR}"
             f"{node_type.value.lower()}{self.ID_SEPARATOR}{name}"
         )
-        module_node_id = (
-            f"{self.filepath}{self.ID_SEPARATOR}module{self.ID_SEPARATOR}{self.module_path}"
-        )
+        module_node_id = f"{self.filepath}{self.ID_SEPARATOR}module{self.ID_SEPARATOR}{self.module_path}"
         if parent_id and parent_id != module_node_id:
             # For nested nodes, include parent context in ID
             parent_name = parent_id.split(self.ID_SEPARATOR)[-1]
@@ -340,12 +340,12 @@ class NodeParser:
                 type_hint = parse_text(self.code, child)
 
         return (
-            ParameterData(name=param_name, type_hint=type_hint)
-            if param_name
-            else None
+            ParameterData(name=param_name, type_hint=type_hint) if param_name else None
         )
 
-    def _parse_typed_default_parameter(self, param_node: TsNode) -> Optional[ParameterData]:
+    def _parse_typed_default_parameter(
+        self, param_node: TsNode
+    ) -> Optional[ParameterData]:
         """Parse typed parameter with default: def func(param: Type = default):"""
         param_name = None
         type_hint = None
@@ -424,9 +424,7 @@ class NodeParser:
         """Build the fully qualified name for the node"""
         qualified_parts = [self.module_path]
 
-        module_node_id = (
-            f"{self.filepath}{self.ID_SEPARATOR}module{self.ID_SEPARATOR}{self.module_path}"
-        )
+        module_node_id = f"{self.filepath}{self.ID_SEPARATOR}module{self.ID_SEPARATOR}{self.module_path}"
         if parent_id and parent_id != module_node_id:
             # Extract parent name from parent_id
             parent_qualified = self._extract_qualified_from_id(parent_id)
