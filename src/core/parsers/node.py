@@ -1,10 +1,11 @@
-from typing import List, Optional
-from tree_sitter import Node as TsNode
 from pathlib import Path
+from typing import List, Optional
+
+from tree_sitter import Node as TsNode
+
+from core.models import Node, NodeParameter, NodeScope, NodeType
 
 from .text import parse_text
-
-from core.models import Node, NodeType, NodeScope, NodeParameter
 
 __all__ = ["NodeParser"]
 

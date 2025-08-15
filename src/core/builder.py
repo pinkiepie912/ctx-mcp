@@ -1,13 +1,13 @@
+import pprint
 from pathlib import Path
 from typing import Dict, List
 
-from tree_sitter import Language, Parser, TreeCursor
 import tree_sitter_python as tspython
+from tree_sitter import Language, Parser
 
-from .models import Edge, Node
 from core.parsers.node import NodeParser
 
-import pprint
+from .models import Edge, Node
 
 
 class PyGraphBuilder:
