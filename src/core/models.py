@@ -7,6 +7,7 @@ from pydantic import BaseModel
 class NodeType(Enum):
     CLASS = "CLASS"
     FUNCTION = "FUNCTION"
+    ASYNC_FUNCTION = "ASYNC_FUNCTION"
     TOKEN = "TOKEN"
     MODULE = "MODULE"
 
@@ -51,7 +52,7 @@ class Node(BaseModel):
         type: Type of the node (e.g. CLASS, FUNCTION, TOKEN, MODULE)
         filepath: Path to the source file where the node is defined (e.g. src/services/order_service.py)
         source_line: Tuple containing the start and end line numbers of the node definition in the source file
-        qulified_name: Fully qualified name of the node (e.g. app.services.order_service.OrderService )
+        qualified_name: Fully qualified name of the node (e.g. app.services.order_service.OrderService )
         scope: Scope of the node declaration (e.g. module, class, function, method, local)
         owner_id: ID of the owner node (e.g. class for method, module for function)
     """
@@ -60,7 +61,7 @@ class Node(BaseModel):
     type: NodeType
     filepath: str
     source_line: Tuple[int, int]  # (line_start, line_end)
-    qulified_name: str
+    qualified_name: str
     scope: NodeScope
     owner_id: str
     parameters: Optional[List[NodeParameter]] = None

@@ -1,9 +1,10 @@
 import pprint
 from pathlib import Path
-from typing import Dict, List
+from typing import Dict, List, Optional, Tuple
 
 import tree_sitter_python as tspython
 from tree_sitter import Language, Parser
+from tree_sitter import Node as TsNode
 
 from core.parsers.node import NodeParser
 
@@ -25,8 +26,6 @@ class PyGraphBuilder:
 
         # TODO: Ignore gitignore patterns
         for file in self.root.rglob("*.py"):
-            if not file.name == "user_reader.py":
-                continue
             code = file.read_bytes()
             tree = self.parser.parse(code)
 
@@ -59,8 +58,8 @@ class PyGraphBuilder:
         module_node = node_parser.create_module_node(root_node)
         nodes.append(module_node)
 
-        # Iterative traversal using explicit stack - no recursion
-        traversal_stack = [(root_node, None)]  # (ts_node, parent_id) tuples
+        # Iterative traversal using explicit stack
+        traversal_stack: List[Tuple[TsNode, Optional[str]]] = [(root_node, None)]
 
         while traversal_stack:
             current_ts_node, parent_id = traversal_stack.pop()
