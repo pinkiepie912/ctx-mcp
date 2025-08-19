@@ -119,6 +119,7 @@ class Edge(BaseModel):
     source: str
     target: str
     source_line: Tuple[int, int]  # (line_start, line_end)
+    source_location: str = ""  # filepath:line_number format (e.g. "app/services/order_service.py:25")
     weight: int = 1
     access_type: AccessType = AccessType.DIRECT
     injection_type: Optional[InjectionType] = None

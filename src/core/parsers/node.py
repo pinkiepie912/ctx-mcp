@@ -136,15 +136,16 @@ class NodeParser:
     def _get_module_path(self, filepath: str) -> str:
         """Convert file path to Python module path"""
         path = Path(filepath)
-        # Remove .py extension and convert path separators to dots
         module_parts = path.with_suffix("").parts
 
-        # Remove common prefixes like 'src', handle relative paths
-        if "src" in module_parts:
-            src_index = module_parts.index("src")
-            module_parts = module_parts[src_index + 1 :]
+        common_prefixes = ["src", "lib", "source", "app", "code"]
+        for prefix in common_prefixes:
+            if prefix in module_parts:
+                prefix_index = module_parts.index(prefix)
+                module_parts = module_parts[prefix_index + 1 :]
+                break
 
-        return ".".join(module_parts)
+        return ".".join(module_parts) if module_parts else path.stem
 
     def _create_module_node(self, root_node: TsNode) -> Node:
         """Create a MODULE type node for the file itself"""
@@ -184,10 +185,7 @@ class NodeParser:
         qualified_name = self._build_qualified_name(name, parent_id)
 
         # Create node ID
-        node_id = (
-            f"{self.filepath}{self.ID_SEPARATOR}"
-            f"{node_type.value.lower()}{self.ID_SEPARATOR}{name}"
-        )
+        node_id = f"{self.filepath}{self.ID_SEPARATOR}{node_type.value.lower()}{self.ID_SEPARATOR}{name}"
         module_node_id = f"{self.filepath}{self.ID_SEPARATOR}module{self.ID_SEPARATOR}{self.module_path}"
         if parent_id and parent_id != module_node_id:
             # For nested nodes, include parent context in ID

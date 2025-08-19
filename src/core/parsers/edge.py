@@ -93,12 +93,15 @@ class EdgeParser:
         # Remove .py extension and convert path separators to dots
         module_parts = path.with_suffix("").parts
 
-        # Remove common prefixes like 'src', handle relative paths
-        if "src" in module_parts:
-            src_index = module_parts.index("src")
-            module_parts = module_parts[src_index + 1 :]
+        # Remove common source directory prefixes dynamically
+        common_prefixes = ["src", "lib", "source", "app", "code"]
+        for prefix in common_prefixes:
+            if prefix in module_parts:
+                prefix_index = module_parts.index(prefix)
+                module_parts = module_parts[prefix_index + 1 :]
+                break
 
-        return ".".join(module_parts)
+        return ".".join(module_parts) if module_parts else path.stem
 
     def _parse_imports(self, ts_node: TsNode) -> List[Edge]:
         """
@@ -147,6 +150,7 @@ class EdgeParser:
                                 ts_node.start_point[0] + 1,
                                 ts_node.end_point[0] + 1,
                             ),
+                            source_location=f"{self.filepath}:{ts_node.start_point[0] + 1}",
                             access_type=AccessType.IMPORT,
                             weight=1,
                         )
@@ -196,6 +200,7 @@ class EdgeParser:
                     source=source_id,
                     target=target_id,
                     source_line=(ts_node.start_point[0] + 1, ts_node.end_point[0] + 1),
+                    source_location=f"{self.filepath}:{ts_node.start_point[0] + 1}",
                     access_type=AccessType.IMPORT,
                     weight=2,  # from imports typically have higher dependency weight
                 )
@@ -245,6 +250,7 @@ class EdgeParser:
                             ts_node.start_point[0] + 1,
                             ts_node.end_point[0] + 1,
                         ),
+                        source_location=f"{self.filepath}:{ts_node.start_point[0] + 1}",
                         access_type=call_info["access_type"],
                         weight=1,
                         async_context=self._is_in_async_context(ts_node),
@@ -305,6 +311,7 @@ class EdgeParser:
                                 actual_class_node.start_point[0] + 1,
                                 actual_class_node.end_point[0] + 1,
                             ),
+                            source_location=f"{self.filepath}:{actual_class_node.start_point[0] + 1}",
                             access_type=AccessType.INHERITANCE,
                             weight=3,  # Inheritance is a strong relationship
                         )
@@ -366,6 +373,7 @@ class EdgeParser:
                             ts_node.start_point[0] + 1,
                             ts_node.end_point[0] + 1,
                         ),
+                        source_location=f"{self.filepath}:{ts_node.start_point[0] + 1}",
                         access_type=AccessType.DIRECT,
                         injection_type=InjectionType.CONSTRUCTOR,
                         optional=dep_info["has_default"],
